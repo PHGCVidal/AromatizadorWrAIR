@@ -142,7 +142,7 @@ void mostrarTelaPareamento() {
     display.setCursor(0, 20);
     display.println("Abra App RainMaker");
     display.setCursor(0, 32);
-    display.println("No QRCode > BLE'");
+    display.println("No QRCode > BLE");
 
     display.setTextSize(2);
     display.setCursor(0, 48);
