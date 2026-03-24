@@ -1,83 +1,41 @@
-# 🌬️ DevLog: Projetando o Aromatizador IoT Definitivo
+# Aromatizador Smart IoT (V1.0)
 
-Sempre quis um aromatizador automático, mas me deparei com dois problemas no mercado: ou os produtos comerciais usam refis proprietários caros, ou as soluções DIY envolvem bombas, mangueiras e vazamentos.
+Um projeto open-source de um aromatizador automático inteligente, desenvolvido com foco em robustez mecânica, segurança de hardware e integração IoT em nuvem. 
 
-Como engenheiro, decidi resolver isso aplicando princípios de **Design Mecatrônico Robusto (KISS)**. Meu objetivo: criar um dispositivo universal, conectado e mecanicamente infalível.
+O objetivo deste projeto foi solucionar as principais falhas de aromatizadores convencionais (refis proprietários caros e mecânicas frágeis) aplicando princípios de Design Mecatrônico e desenvolvendo uma infraestrutura de controle remoto completa.
 
-Aqui está o registro do desenvolvimento e as decisões técnicas que tomei.
+## 💡 Arquitetura do Sistema
 
----
+A abordagem escolhida para este projeto foi **100% Mecânica (Solid-State Control)**. Em vez de utilizar bombas hidráulicas ou diafragmas — que adicionam pontos de falha por vazamento e exigem manutenção de tubulação —, o sistema atua fisicamente sobre um frasco spray padrão de mercado (60ml/100ml) através de um mecanismo de came-seguidor.
 
-## 💡 O Conceito: Por que Mecânica Pura?
+### O Software e a Nuvem (ESP RainMaker)
+O firmware foi desenvolvido utilizando o ecossistema ESP RainMaker, garantindo comunicação segura, provisionamento via Bluetooth e controle em tempo real pelo smartphone. As principais funcionalidades embarcadas incluem:
+* **Controle Remoto:** Acionamento manual do mecanismo de qualquer lugar via Wi-Fi.
+* **Agendamento (Scheduling):** Configuração de rotinas e timers pelo aplicativo, evitando o desperdício de essência em horários sem fluxo de pessoas.
+* **Modo Noturno Automático:** Intervalo de tempo configurável onde o display OLED é desligado e qualquer acionamento mecânico é bloqueado pelo sistema.
 
-Minha primeira ideia foi usar bombas peristálticas ou diafragmas (hidráulica). Mas, analisando a complexidade, percebi que isso adicionava pontos de falha desnecessários: vedação, limpeza de tubos e risco de vazamento na eletrônica.
+## 🛠️ Hardware e Eletrônica
 
-Decidi pivotar para uma abordagem **100% Mecânica**. Em vez de manipular o líquido, eu manipulo o frasco. O sistema funciona como um "dedo robótico" que aperta qualquer spray de farmácia (60ml).
+A eletrônica foi estruturada em uma perfboard com foco em segurança e modularidade, utilizando conectores JST para facilitar a manutenção.
 
-### Came - Seguidor
+* **Microcontrolador:** ESP32 (Responsável pelo gerenciamento do FreeRTOS, Wi-Fi e controle dos periféricos).
+* **Atuador:** Servo Motor MG996R (Metal Gear). Escolhido pelo torque elevado (aprox. 10kg.cm), capaz de vencer a resistência da mola da válvula do spray com ampla margem de segurança.
+* **Interface (IHM):** Display OLED I2C para feedback visual de status e conexão.
+* **Proteção Elétrica:** Implementação de um capacitor eletrolítico de 1000uF na linha de 5V para suprir picos de corrente do servo motor e evitar *brownouts* (resets indesejados) no ESP32.
 
-* **Solução antiga:** Um came oval. 
-    * **0º (Repouso A):** O came não toca no frasco.
-    * **90º (Ataque):** O raio máximo aperta o spray.
-    * **0º (Repouso A):** Retorna ao repouso invertendo o sentido de rotação
-    
-* **A nova solução** permite que o borrifador do frasco seja pressionado tranquilamente. O deslocamento necessário para que ele seja pressionado até o fim, é de aproximadamente **5 mm**
+## ⚙️ Design Mecânico e Segurança
 
----
+Toda a estrutura física, suportes e o mecanismo do came foram modelados em CAD e fabricados via impressão 3D. 
+* **Design for Maintenance:** A tampa de acesso ao refil utiliza um sistema de fechamento magnético, permitindo a troca rápida do frasco.
+* **Isolamento de Risco:** A eletrônica e o motor ficam fisicamente isolados em um compartimento superior, separados da área de manuseio e acima da linha do líquido, mitigando qualquer risco de curto-circuito em caso de vazamento do frasco.
+* **Ajuste Fino:** O suporte do motor possui furos oblongos, permitindo a calibração da distância de ataque do came, evitando o *stall* (travamento) do motor contra o final de curso da válvula.
 
-## 🛠️ Hardware: As Escolhas
+## 🚀 Roadmap e Próximos Passos (V2.0)
 
-Para garantir confiabilidade, fugi dos componentes de brinquedo.
+Com a V1.0 validada e em operação, o desenvolvimento atual está focado na transição do protótipo para um produto comercial escalável (V2.0). Os objetivos arquiteturais são:
 
-* **Cérebro: ESP32.** Escolhi pela conectividade Wi-Fi nativa. Quero configurar os intervalos pelo celular (Web Server), não ficar apertando botões físicos na parede.
-* **Músculo: Servo MG996R.** Nada de servos azuis (SG90). Preciso de engrenagens de metal e torque de 10kg/cm para vencer a mola do spray sem esforço.
-* **Segurança Elétrica:** Adicionei um capacitor de **1000uF** na linha de 5V. Servos potentes causam picos de corrente na partida que resetam o microcontrolador. O capacitor resolve esse *brownout*.
-
----
-
-## 🥤 Escolha do frasco:
-Escolhi um frasco de 60/100 ml (o que for mais baixo) com um aplicador no bocal, o aplicador permite que eu faça uma guia para o bocal do spray, assim o movimento do came não consegue fazer o bocal girar.
-
-## 🧠 A Lógica: Máquina de Estados
-
-No firmware, implementei uma lógica de controle baseada em estados para otimizar o desgaste mecânico. Não é apenas "ligar e desligar".
-
-O sistema sabe onde o braço está (Lado A ou Lado B).
-* Se preciso de **1 Spray**, o servo viaja de A para B (passando pela "lombada" central).
-* Se preciso de **2 Sprays**, ele faz o ciclo duas vezes.
-
-Isso elimina movimentos mortos e torna o barulho de operação mínimo.
+1. **Custom PCB:** Substituir a perfboard e o ESP32 clássico por uma placa de circuito impresso dedicada, utilizando o módulo **ESP32-C3** (arquitetura RISC-V) para redução drástica de custos e tamanho.
+3. **Sensores Inteligentes:** Integração de um sensor de presença (PIR) para acionamento condicionado à ocupação do ambiente. Além de um sistema para reconhecer a necessidade de troca da essência.
 
 ---
-
-## 📋 Lista de Materiais (BOM)
-
-Para quem quiser replicar meu setup:
-
-1.  **ESP32** (Qualquer modelo, estou usando um DevKit V1).
-2.  **Servo MG996R** (Metal Gear).
-3.  **Fonte USB 5V 2A** (Carregador antigo de celular).
-4.  **Capacitor Eletrolítico 1000uF/16V**.
-5.  **Frasco Spray com aplicador 100ml** (Genérico de viagem).
-6.  **Case Impresso em 3D** (PLA/PETG).
-
----
-
-## ⚠️ Análise de Riscos (O que pode dar errado?)
-
-Durante o projeto, identifiquei três pontos críticos que tratei no design:
-
-1.  **Stall do Motor:** Se o came for grande demais, o servo trava e queima. **Solução:** Projetei o suporte do motor com furos oblongos, permitindo ajuste fino da altura na hora da montagem.
-2.  **Troca de Refil:** O usuário precisa trocar o frasco fácil. **Solução:** Na posição de repouso, o came não toca no botão, deixando o frasco livre para ser deslizado para fora.
-3.  **Vazamento:** Embora raro, sprays vazam. **Solução:** O compartimento da eletrônica (ESP32) fica fisicamente isolado e acima da linha do líquido.
-
----
-
-## 🚀 Próximos Passos
-
-1.  Validar a impressão do Came com **100% de infill** (precisa ser sólido).
-2.  Testar a interface Web para ajuste de timer.
-3.  Montagem final e teste de stress da mola.
-
----
-*Este projeto é Open Source. Sinta-se livre para usar o código e os STLs.*
+* Sinta-se livre para analisar o código, utilizar os arquivos STL e propor melhorias para as próximas versões.*
