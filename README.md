@@ -69,6 +69,7 @@ Para replicar a V1.0 deste projeto, você precisará dos seguintes componentes:
 * **1x Capacitor Eletrolítico 1000uF** (Filtro essencial para suprir o pico de corrente do servo)
 * **1x Kit de Conectores JST** (Para modularidade entre placa, motor e alimentação)
 * **1x Display Oled 0.96" I2c 128x64 (com o maior furo circular)
+* **1x Push Button
 
 ### 🔩 Mecânica e Estrutura (Hardware)
 * **1x Frasco Plástico PET Cilíndrico 60ml com Válvula Spray** (Medidas do modelo utilizado: Altura `13.4` mm x Diâmetro `3.0` mm) (Eu optei por trocar a tampa para uma com bico aplicador)
