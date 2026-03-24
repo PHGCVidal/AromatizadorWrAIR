@@ -57,6 +57,29 @@ Todos os arquivos `.stl` necessários para a montagem da V1.0 estão na pasta `/
 * **Carcaça princial:** Inserir pausa na camada **240** (ou na altura X.X mm). Coloque os ímãs, certifique-se de que estão rentes ao plástico e retome a impressão.
 * **Pausa nas Tampas:** Inserir pausa na camada **15**. **Atenção à polaridade** dos ímãs antes de inserir, para garantir que a tampa seja atraída e não repelida pela base!
 * * **Dica:**  Recomendo o uso de um pouco de cola instatânea (cianoacrilato) nos furos para os imãs para não ter problemas durante o resto da impressão
+ 
+## 📋 Lista de Materiais (BOM)
+
+Para replicar a V1.0 deste projeto, você precisará dos seguintes componentes:
+
+### ⚡ Eletrônica e Atuação
+* **1x Placa de Desenvolvimento ESP32-WROOM**
+* **1x Servo Motor MG996R Metal Gear** (Tower Pro - 13kg de torque)
+* **1x Placa de Fenolite Ilhada (Perfboard)** (Tamanho 5x7 cm)
+* **1x Capacitor Eletrolítico 1000uF** (Filtro essencial para suprir o pico de corrente do servo)
+* **1x Kit de Conectores JST** (Para modularidade entre placa, motor e alimentação)
+* **1x Display Oled 0.96" I2c 128x64 (com o maior furo circular)
+
+### 🔩 Mecânica e Estrutura (Hardware)
+* **1x Frasco Plástico PET Cilíndrico 60ml com Válvula Spray** (Medidas do modelo utilizado: Altura `13.4` mm x Diâmetro `3.0` mm) (Eu optei por trocar a tampa para uma com bico aplicador)
+* **12X Ímãs de Neodímio Redondos** (4mm x 2mm - N35) para o fechamento magnético da tampa
+* **4X Insertos Metálicos de Rosca M3** (Para embutir nas peças impressas em 3D usando calor)
+* **9X Parafusos Allen M3 x 12mm Cilíndricos**
+* **4X Parafusos Phillips M3 x 6mm Chatos**
+
+### 🔌 Alimentação (Energia)
+* **1x Fonte de Alimentação 5V 3A** (Corrente extra garante estabilidade para a mecânica e o Wi-Fi)
+* **1x Conector USB-C Fêmea com Rabicho (10cm)** (Para embutir na carcaça impressa e facilitar a conexão externa)
 
 ---
 * Sinta-se livre para analisar o código, utilizar os arquivos STL e propor melhorias para as próximas versões.*
