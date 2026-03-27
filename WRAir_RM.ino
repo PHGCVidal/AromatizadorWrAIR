@@ -59,7 +59,7 @@ static int gpio_switch = 2;
 static int gpio_reset = 4;
 #endif
 
-static Switch *my_switch = NULL;
+static Device *my_switch = NULL;
 
 void getHoraAtual(char *buffer, size_t tamanho) {
     struct tm timeinfo;
@@ -358,8 +358,20 @@ void setup()
     Node my_node;
     my_node = RMaker.initNode("ESP RainMaker Node");
 
-    my_switch = new Switch("Switch", &gpio_switch);
+    // Cria o dispositivo genérico para controlar a ordem
+    my_switch = new Device("Aromatizador", ESP_RMAKER_DEVICE_SWITCH);
     if (!my_switch) return;
+
+    // 1º DA LISTA: Qtd Sprays (agora com persistência)
+    Param qtd("Qtd Sprays", ESP_RMAKER_PARAM_RANGE, value(qtd_disparos), PROP_FLAG_READ | PROP_FLAG_WRITE | PROP_FLAG_PERSIST);
+    qtd.addBounds(value(1), value(5), value(1)); 
+    qtd.addUIType(ESP_RMAKER_UI_SLIDER);
+    my_switch->addParam(qtd);
+
+    // 2º DA LISTA: Botão Power
+    Param power("Power", ESP_RMAKER_PARAM_POWER, value(DEFAULT_POWER_MODE), PROP_FLAG_READ | PROP_FLAG_WRITE);
+    power.addUIType(ESP_RMAKER_UI_TOGGLE);
+    my_switch->addParam(power);
     
     my_switch->addParam(Param("Ultimo Disparo", "esp.param.text", value("---"), PROP_FLAG_READ));
 
@@ -367,21 +379,17 @@ void setup()
     tela_sw.addUIType(ESP_RMAKER_UI_TOGGLE);
     my_switch->addParam(tela_sw);
 
-    Param qtd("Qtd Sprays", ESP_RMAKER_PARAM_RANGE, value(qtd_disparos), PROP_FLAG_READ | PROP_FLAG_WRITE);
-    qtd.addBounds(value(1), value(5), value(1)); 
-    qtd.addUIType(ESP_RMAKER_UI_SLIDER);
-    my_switch->addParam(qtd);
-
-    Param dnd_sw("Modo Noturno", ESP_RMAKER_PARAM_POWER, value(dnd_ativo), PROP_FLAG_READ | PROP_FLAG_WRITE);
+    // Persistência nos parâmetros do Modo Noturno
+    Param dnd_sw("Modo Noturno", ESP_RMAKER_PARAM_POWER, value(dnd_ativo), PROP_FLAG_READ | PROP_FLAG_WRITE | PROP_FLAG_PERSIST);
     dnd_sw.addUIType(ESP_RMAKER_UI_TOGGLE);
     my_switch->addParam(dnd_sw);
 
-    Param dnd_ini("DND Inicio", ESP_RMAKER_PARAM_RANGE, value(dnd_inicio), PROP_FLAG_READ | PROP_FLAG_WRITE);
+    Param dnd_ini("DND Inicio", ESP_RMAKER_PARAM_RANGE, value(dnd_inicio), PROP_FLAG_READ | PROP_FLAG_WRITE | PROP_FLAG_PERSIST);
     dnd_ini.addBounds(value(0.0f), value(24.0f), value(0.5f)); 
     dnd_ini.addUIType(ESP_RMAKER_UI_SLIDER);
     my_switch->addParam(dnd_ini);
 
-    Param dnd_end("DND Fim", ESP_RMAKER_PARAM_RANGE, value(dnd_fim), PROP_FLAG_READ | PROP_FLAG_WRITE);
+    Param dnd_end("DND Fim", ESP_RMAKER_PARAM_RANGE, value(dnd_fim), PROP_FLAG_READ | PROP_FLAG_WRITE | PROP_FLAG_PERSIST);
     dnd_end.addBounds(value(0.0f), value(24.0f), value(0.5f)); 
     dnd_end.addUIType(ESP_RMAKER_UI_SLIDER);
     my_switch->addParam(dnd_end);
@@ -397,6 +405,43 @@ void setup()
     RMaker.enableSystemService(SYSTEM_SERV_FLAGS_ALL, 0, 0, 0);
 
     RMaker.start();
+
+    // --- SINCRONIZAÇÃO DE MEMÓRIA (AROMATIZADOR) ---
+    // Sincroniza Qtd Sprays
+    param_handle_t *param_qtd = my_switch->getParamByName("Qtd Sprays");
+    if (param_qtd) {
+        const esp_rmaker_param_val_t *val_qtd = esp_rmaker_param_get_val(param_qtd);
+        if (val_qtd) {
+            qtd_disparos = val_qtd->val.i;
+        }
+    }
+
+    // Sincroniza Modo Noturno (Booleano)
+    param_handle_t *param_dnd = my_switch->getParamByName("Modo Noturno");
+    if (param_dnd) {
+        const esp_rmaker_param_val_t *val_dnd = esp_rmaker_param_get_val(param_dnd);
+        if (val_dnd) {
+            dnd_ativo = val_dnd->val.b;
+        }
+    }
+
+    // Sincroniza DND Inicio (Float)
+    param_handle_t *param_dnd_ini = my_switch->getParamByName("DND Inicio");
+    if (param_dnd_ini) {
+        const esp_rmaker_param_val_t *val_dnd_ini = esp_rmaker_param_get_val(param_dnd_ini);
+        if (val_dnd_ini) {
+            dnd_inicio = val_dnd_ini->val.f;
+        }
+    }
+
+    // Sincroniza DND Fim (Float)
+    param_handle_t *param_dnd_fim = my_switch->getParamByName("DND Fim");
+    if (param_dnd_fim) {
+        const esp_rmaker_param_val_t *val_dnd_fim = esp_rmaker_param_get_val(param_dnd_fim);
+        if (val_dnd_fim) {
+            dnd_fim = val_dnd_fim->val.f;
+        }
+    }
 
     // Reset estado
     my_switch->updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
