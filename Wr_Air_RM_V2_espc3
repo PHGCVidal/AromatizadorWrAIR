@@ -72,7 +72,6 @@ void getHoraAtual(char *buffer, size_t tamanho) {
 
 // --- FUNÇÃO DE DESENHO ---
 void atualizarTela(String titulo, String rodape = "", bool limpar = true) {
-    // 1. SEGURANÇA
     if (!sessao_provisionamento_encerrada && titulo != "SETUP") return;
 
     if (!tela_ligada) return;
@@ -95,7 +94,6 @@ void atualizarTela(String titulo, String rodape = "", bool limpar = true) {
         char horaBuff[10];
         getHoraAtual(horaBuff, sizeof(horaBuff));
 
-        // Hora Grande (Centro)
         display.setTextSize(3);
         // Centralização aproximada (Tam 3 = ~18px largura)
         int len = strlen(horaBuff);
@@ -543,18 +541,16 @@ void loop()
             ultimoUpdate = millis();
         }
     }
-    // --- LÓGICA DO BOTÃO DE RESET (CRUA E DIRETA) ---
+    // --- LÓGICA DO BOTÃO DE RESET ---
     if (digitalRead(gpio_reset) == LOW) {
-        delay(200); // Filtro anti-ruído rápido
+        delay(200); // Debounce
         
-        if (digitalRead(gpio_reset) == LOW) { // Confirma que é um toque real
-            
-            // Só executa o reset do Wi-Fi e pronto
+        if (digitalRead(gpio_reset) == LOW) {
+        
             RMakerWiFiReset(2); 
             
-            // Trava o código aqui e espera a placa reiniciar sozinha
             while(true) delay(100); 
         }
     }
-    delay(50); // Dá um fôlego para o processador
+    delay(50); 
 }
