@@ -46,6 +46,17 @@ bool sincronizar_tela_app = false;
 bool sessao_provisionamento_encerrada = false; 
 unsigned long timestamp_fim_prov = 0;
 
+// Enumeração para controlar o status geral do dispositivo
+enum EstadoDispositivo {
+    ESTADO_BOOT,
+    ESTADO_PAREAMENTO,
+    ESTADO_CONECTANDO,
+    ESTADO_ONLINE,
+    ESTADO_SEM_WIFI
+};
+EstadoDispositivo estadoAtual = ESTADO_BOOT;
+bool precisaAtualizarTela = false;
+
 Servo meuServo;
 
 // GPIO
@@ -154,30 +165,34 @@ void sysProvEvent(arduino_event_t *sys_event)
 {
     switch (sys_event->event_id) {
     case ARDUINO_EVENT_PROV_START:
-#if CONFIG_IDF_TARGET_ESP32S2
-        Serial.printf("\nSoftAP Provisioning\n");
-        printQR(service_name, pop, "softap");
-#else
-        Serial.printf("\nBLE Provisioning\n");
-        printQR(service_name, pop, "ble");
-#endif
+        estadoAtual = ESTADO_PAREAMENTO;
+        precisaAtualizarTela = true;
         break;
         
     case ARDUINO_EVENT_PROV_CRED_SUCCESS:
-        // Deixa o Bluetooth ligado para o celular receber a confirmação de sucesso.
         Serial.println("Credenciais recebidas! Conectando...");
+        estadoAtual = ESTADO_CONECTANDO;
+        precisaAtualizarTela = true;
         break;
 
     case ARDUINO_EVENT_PROV_END:
-        // Este evento acontece sozinho quando o App RainMaker termina o trabalho.
-        Serial.println("\n--- FIM DO PROVISIONAMENTO ---");
         sessao_provisionamento_encerrada = true;
         timestamp_fim_prov = millis();
         break;
 
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        Serial.println("IP Obtido! Conectado ao Wi-Fi.");
+        Serial.println("IP Obtido!");
         sessao_provisionamento_encerrada = true;
+        estadoAtual = ESTADO_ONLINE;
+        precisaAtualizarTela = true;
+        break;
+
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        Serial.println("Wi-Fi Caiu!");
+        sessao_provisionamento_encerrada = true;
+        estadoAtual = ESTADO_SEM_WIFI;
+        precisaAtualizarTela = true;
+        WiFi.reconnect();
         break;
         
     default:;
@@ -342,7 +357,9 @@ void setup()
     if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
         Serial.println(F("Erro OLED"));
     }
-    mostrarTelaPareamento(); 
+    // Começa com a tela limpa até o Wi-Fi decidir o que fazer
+    display.clearDisplay();
+    display.display();
 
     pinMode(gpio_reset, INPUT_PULLUP);
     pinMode(gpio_switch, OUTPUT);
@@ -458,99 +475,127 @@ void loop()
 {
     static bool status_noturno_anterior = false; 
     static bool primeira_leitura_feita = false; 
-
-    // SÓ RODA SE TIVER CONECTADO E CONFIGURADO
-    if (sessao_provisionamento_encerrada && WiFi.status() == WL_CONNECTED) {
+    
+    // --- GESTOR DE TELA SEGURO (Evita colisão no I2C) ---
+    if (precisaAtualizarTela) {
+        precisaAtualizarTela = false; // Reseta a flag
         
-        // --- ATUALIZA O APP SE A AUTOMAÇÃO DESLIGAR A TELA ---
-        if (sincronizar_tela_app) {
-            if (my_switch) my_switch->updateAndReportParam("Tela OLED", tela_ligada);
-            sincronizar_tela_app = false;
+        if (estadoAtual == ESTADO_PAREAMENTO) {
+            mostrarTelaPareamento();
+        } 
+        else if (estadoAtual == ESTADO_CONECTANDO) {
+            atualizarTela("CONECTANDO", "Aguarde...", true);
         }
-
-        // --- 1. TRAVA DE SEGURANÇA ---
-        if (timestamp_fim_prov != 0) {
-            if (millis() - timestamp_fim_prov < 3000) {
-                return; 
-            } else {
-                timestamp_fim_prov = 0; 
-                ultimoUpdate = 0; 
-            }
+        else if (estadoAtual == ESTADO_ONLINE) {
+            atualizarTela("ONLINE");
         }
+        else if (estadoAtual == ESTADO_SEM_WIFI) {
+            atualizarTela("SEM WIFI", "Buscando rede...", true);
+        }
+    }
 
-        // --- 2. INTERVALO E AUTOMAÇÃO DA TELA ---
-        long intervalo = 60000; 
+    // Se ainda está em modo pareamento ou no boot inicial, não deixa o resto do loop rodar
+    if (estadoAtual == ESTADO_PAREAMENTO || estadoAtual == ESTADO_BOOT) {
+        delay(100);
+        return; 
+    }
+
+    // --- ATUALIZA O APP SE A AUTOMAÇÃO DESLIGAR A TELA ---
+    if (sincronizar_tela_app) {
+        if (my_switch) my_switch->updateAndReportParam("Tela OLED", tela_ligada);
+        sincronizar_tela_app = false;
+    }
+
+    // --- 1. TRAVA DE SEGURANÇA DO FIM DO PROVISIONAMENTO ---
+    if (timestamp_fim_prov != 0) {
+        if (millis() - timestamp_fim_prov < 3000) {
+            return; 
+        } else {
+            timestamp_fim_prov = 0; 
+            ultimoUpdate = 0; 
+            // Força um redesenho limpo quando acaba a trava
+            precisaAtualizarTela = true; 
+        }
+    }
+
+    // --- 2. INTERVALO E AUTOMAÇÃO DA TELA ---
+    long intervalo = 60000; 
+    
+    if (ultimoUpdate == 0 || millis() - ultimoUpdate > intervalo) { 
+        struct tm timeinfo;
         
-        if (ultimoUpdate == 0 || millis() - ultimoUpdate > intervalo) { 
-            struct tm timeinfo;
-            
-            // Tenta pegar a hora de forma segura 
-            bool hora_valida = getLocalTime(&timeinfo, 0); 
-            
-            if(!hora_valida){
-                intervalo = 2000; 
-            } else {
-                intervalo = 60000;
+        // Tenta pegar a hora de forma segura 
+        bool hora_valida = getLocalTime(&timeinfo, 0); 
+        
+        if(!hora_valida){
+            intervalo = 2000; 
+        } else {
+            intervalo = 60000;
 
-                // --- AUTOMAÇÃO DA TELA MODO NOTURNO ---
-                bool deve_estar_desligada = false;
-                
-                // Só verifica os horários se o botão do Modo Noturno estiver ligado no app
-                if (dnd_ativo) {
-                    int minutos_agora = (timeinfo.tm_hour * 60) + timeinfo.tm_min;
-                    int minutos_inicio = dnd_inicio * 60;
-                    int minutos_fim = dnd_fim * 60;
+            // --- AUTOMAÇÃO DA TELA MODO NOTURNO ---
+            bool deve_estar_desligada = false;
+            
+            // Só verifica os horários se o botão do Modo Noturno estiver ligado no app
+            if (dnd_ativo) {
+                int minutos_agora = (timeinfo.tm_hour * 60) + timeinfo.tm_min;
+                int minutos_inicio = dnd_inicio * 60;
+                int minutos_fim = dnd_fim * 60;
 
-                    if (minutos_inicio < minutos_fim) {
-                        if (minutos_agora >= minutos_inicio && minutos_agora < minutos_fim) deve_estar_desligada = true;
-                    } else {
-                        if (minutos_agora >= minutos_inicio || minutos_agora < minutos_fim) deve_estar_desligada = true;
-                    }
+                if (minutos_inicio < minutos_fim) {
+                    if (minutos_agora >= minutos_inicio && minutos_agora < minutos_fim) deve_estar_desligada = true;
+                } else {
+                    if (minutos_agora >= minutos_inicio || minutos_agora < minutos_fim) deve_estar_desligada = true;
                 }
+            }
 
-                // Só executa a ação se o status tiver mudado OU se for a leitura inicial do boot
-                if (deve_estar_desligada != status_noturno_anterior || !primeira_leitura_feita) {
-                    status_noturno_anterior = deve_estar_desligada; 
+            // Só executa a ação se o status tiver mudado OU se for a leitura inicial do boot
+            if (deve_estar_desligada != status_noturno_anterior || !primeira_leitura_feita) {
+                status_noturno_anterior = deve_estar_desligada; 
+                
+                if (deve_estar_desligada) { 
+                    // Entrou no horário DND: Limpa a memória e desliga fisicamente
+                    tela_ligada = false;
+                    display.clearDisplay();
+                    display.display();
+                    display.ssd1306_command(SSD1306_DISPLAYOFF);
+                } else { 
+                    // Saiu do horário DND (ou o DND foi desativado): Religa a tela
+                    tela_ligada = true;
+                    display.ssd1306_command(SSD1306_DISPLAYON);
                     
-                    if (deve_estar_desligada) { 
-                        // Entrou no horário DND: Limpa a memória e desliga fisicamente
-                        tela_ligada = false;
-                        display.clearDisplay();
-                        display.display();
-                        display.ssd1306_command(SSD1306_DISPLAYOFF);
-                    } else { 
-                        // Saiu do horário DND (ou o DND foi desativado): Religa a tela
-                        tela_ligada = true;
-                        display.ssd1306_command(SSD1306_DISPLAYON);
-                        
-                        // Força o desenho imediato para a tela não ficar preta esperando 1 minuto
+                    // Força o desenho imediato para a tela não ficar preta esperando 1 minuto
+                    if (estadoAtual == ESTADO_ONLINE) {
                         char horaTemp[10];
                         getHoraAtual(horaTemp, sizeof(horaTemp));
                         atualizarTela("ONLINE", horaTemp);
                     }
-                    
-                    // Sincroniza o botão "Tela OLED" no app do celular
-                    if (primeira_leitura_feita) {
-                        sincronizar_tela_app = true; 
-                    }
-                    primeira_leitura_feita = true;
                 }
+                
+                // Sincroniza o botão "Tela OLED" no app do celular
+                if (primeira_leitura_feita) {
+                    sincronizar_tela_app = true; 
+                }
+                primeira_leitura_feita = true;
             }
+        } // <- Fecha o bloco do "if(!hora_valida) / else"
 
+        // A tela só atualiza o relógio minuto a minuto SE estivermos online.
+        if (estadoAtual == ESTADO_ONLINE) {
             atualizarTela("ONLINE");
-            ultimoUpdate = millis();
         }
-    }
+        
+        ultimoUpdate = millis();
+    } // <- Fecha o bloco do "if (ultimoUpdate == 0 || millis() - ultimoUpdate > intervalo)"
+
     // --- LÓGICA DO BOTÃO DE RESET ---
     if (digitalRead(gpio_reset) == LOW) {
         delay(200); // Debounce
         
         if (digitalRead(gpio_reset) == LOW) {
-        
             RMakerWiFiReset(2); 
-            
             while(true) delay(100); 
         }
     }
+    
     delay(50); 
 }
