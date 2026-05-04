@@ -4,6 +4,7 @@
 #include "AppInsights.h"
 #include <ESP32Servo.h>
 #include "time.h"
+#include <nvs_flash.h>
 
 // --- DISPLAY ---
 #include <Wire.h>
@@ -414,11 +415,12 @@ void setup()
     my_switch->addCb(write_callback);
     my_node.addDevice(*my_switch);
 
-    RMaker.enableOTA(OTA_USING_TOPICS);
-    RMaker.enableTZService();
+    // --- LIGA OS SERVIÇOS ESSENCIAIS DO RAINMAKER ---
+    // RMaker.enableOTA(OTA_USING_TOPICS); // Desative isso para testar o pareamento
+    RMaker.enableTZService(); // Necessário para a hora
     RMaker.enableSchedule();
-    RMaker.enableScenes();
-    initAppInsights();
+    // RMaker.enableScenes(); // Desative se não for usar "Cenas"
+    // initAppInsights(); // VILÃO DA MEMÓRIA NO C3: Remova ou comente.
     RMaker.enableSystemService(SYSTEM_SERV_FLAGS_ALL, 0, 0, 0);
 
     RMaker.start();
@@ -587,12 +589,31 @@ void loop()
         ultimoUpdate = millis();
     } // <- Fecha o bloco do "if (ultimoUpdate == 0 || millis() - ultimoUpdate > intervalo)"
 
-    // --- LÓGICA DO BOTÃO DE RESET ---
+        // --- LÓGICA DO BOTÃO DE RESET (SOLUÇÃO DE OUT OF MEMORY) ---
     if (digitalRead(gpio_reset) == LOW) {
-        delay(200); // Debounce
+        delay(200); // Filtro anti-ruído rápido
         
         if (digitalRead(gpio_reset) == LOW) {
-            RMakerWiFiReset(2); 
+            atualizarTela("RESETANDO", "Limpando...", true);
+            delay(1000); 
+
+            WiFi.disconnect(true, true);
+            delay(500);
+
+            // Manda o RainMaker limpar o nó da nuvem e formatar a NVS interna
+            RMakerFactoryReset(0); // 0 = limpa tudo IMEDIATAMENTE e devolve o controle
+
+            // Destrói as chaves na marra para garantir
+            nvs_flash_erase(); 
+            nvs_flash_init(); 
+            
+            Serial.println("Gerando HARD RESET para limpar a RAM do C3...");
+            
+            // NO C3: Nunca use ESP.restart() após um reset do Rainmaker!
+            // Aciona o registrador RTC de baixo nível para dar um Cold Boot
+            // Isso vai matar a placa de verdade e ligá-la com a RAM 100% livre
+            REG_WRITE(RTC_CNTL_OPTIONS0_REG, RTC_CNTL_SW_SYS_RST); 
+            
             while(true) delay(100); 
         }
     }
